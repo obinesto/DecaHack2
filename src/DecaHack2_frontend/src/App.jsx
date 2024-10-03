@@ -1,31 +1,14 @@
-import { useState } from 'react';
-import { DecaHack2_backend } from 'declarations/DecaHack2_backend';
+import { useState, useEffect } from "react";
+import { DecaHack2_backend } from "declarations/DecaHack2_backend";
 
-function App() {
-  const [greeting, setGreeting] = useState('');
-
-  function handleSubmit(event) {
-    event.preventDefault();
-    const name = event.target.elements.name.value;
-    DecaHack2_backend.greet(name).then((greeting) => {
-      setGreeting(greeting);
-    });
-    return false;
-  }
-
+const App = () => {
   return (
-    <main>
-      <img src="/logo2.svg" alt="DFINITY logo" />
-      <br />
-      <br />
-      <form action="#" onSubmit={handleSubmit}>
-        <label htmlFor="name">Enter your name: &nbsp;</label>
-        <input id="name" alt="Name" type="text" />
-        <button type="submit">Click Me!</button>
-      </form>
-      <section id="greeting">{greeting}</section>
-    </main>
+    <>
+      <div className="section-1">
+        <h1>App Section</h1>
+      </div>
+    </>
   );
-}
+};
 
 export default App;
