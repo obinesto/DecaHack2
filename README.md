@@ -59,3 +59,14 @@ If you are hosting frontend code somewhere without using DFX, you may need to ma
 - Write your own `createActor` constructor
 
 - copy dfx.json.example to dfx.json
+
+# About API
+  `The Motoko code defines an actor named Marketplace that serves as a backend/API for a freelancing platform. This actor manages users, jobs, payments, and disputes. The code begins by importing several modules from the Motoko base library, such as Principal, HashMap, Buffer, and others, which provide essential functionalities for the actor.`
+
+  `The Marketplace actor defines several types to represent users, roles, payments, applications, jobs, statuses, evidence, and disputes. For instance, the User type includes fields for username, hashedPassword, and role, while the Job type includes title, description, and salary. The actor maintains several HashMap instances to store users, username-to-principal mappings, disputes, payments, jobs, and applications. These maps are used to efficiently manage and retrieve data.`
+
+  `The Marketplace actor includes various functions to handle user-related operations. The init function initializes a secret for hashing passwords. The isLoggedIn function checks if a user is logged in, while getUserRole retrieves the role of a user. The registerUser function registers a new user, ensuring that the user ID and username are unique. The hashPassword function hashes a given password using a secret. The generatePrincipalFromUsername function generates a principal from a username by hashing it. The signup function allows a new user to sign up, and the login function handles user login by validating credentials. The actor also includes functions for managing jobs. The postJob function allows a client to post a job, while getJob retrieves a job by client ID. The deleteJob function deletes a job by client ID. Additionally, the applyForJob function allows a freelancer to apply for a job, and getApplications retrieves job applications by freelancer ID.`
+
+  `For payment management, the createEscrow function creates an escrow payment between a client and a freelancer. The releasePayment function releases a payment to the freelancer.`
+
+  `The actor also handles dispute resolution. The initiateDispute function initiates a dispute between a client and a freelancer. The submitEvidence function allows submitting evidence for a dispute. The changeDisputeStatus function changes the status of a dispute. The getDispute function retrieves dispute details, while resolveDispute resolves a dispute with a given decision. The getDisputeStatus function retrieves the status of a dispute, and listAllDisputes lists all disputes with their details.`

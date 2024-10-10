@@ -116,7 +116,7 @@ actor Marketplace {
         } catch (e) {
             Debug.print("Error registering user: " # Error.message(e));
             return false;
-        }
+        };
     };
 
     private func hashPassword(password : Text) : async Text {
@@ -131,20 +131,20 @@ actor Marketplace {
         } catch (e) {
             Debug.print("Error hashing password: " # Error.message(e));
             throw Error.reject("Hashing password failed");
-        }
+        };
     };
 
     private func generatePrincipalFromUsername(username : Text) : async Principal {
-    try {
-        let hash = Sha256.fromBlob(#sha256, Text.encodeUtf8(username));
-        // Truncating the hash to 28 bytes (224 bits) to fit the Principal size limit
-        let truncatedHash = Array.subArray(Blob.toArray(hash), 0, 28);
-        return Principal.fromBlob(Blob.fromArray(truncatedHash));
-    } catch (e) {
-        Debug.print("Error generating principal from username: " # Error.message(e));
-        throw Error.reject("Generating principal failed");
-    }
-};
+        try {
+            let hash = Sha256.fromBlob(#sha256, Text.encodeUtf8(username));
+            // Truncating the hash to 28 bytes (224 bits) to fit the Principal size limit
+            let truncatedHash = Array.subArray(Blob.toArray(hash), 0, 28);
+            return Principal.fromBlob(Blob.fromArray(truncatedHash));
+        } catch (e) {
+            Debug.print("Error generating principal from username: " # Error.message(e));
+            throw Error.reject("Generating principal failed");
+        };
+    };
 
     public func signup(username : Text, password : Text, role : Role) : async Principal {
         let hashedPasswordText = await hashPassword(password);
@@ -205,6 +205,23 @@ actor Marketplace {
 
     public query func getUsers() : async [User] {
         return Iter.toArray(users.vals());
+    };
+
+    // Deleting users
+    public func deleteUser(userId : Principal) : async Bool {
+        let user = users.get(userId);
+        switch (user) {
+            case null {
+                Debug.print("User not found");
+                return false;
+            };
+            case (?u) {
+                users.delete(userId);
+                usernameMap.delete(u.username);
+                Debug.print("User deleted successfully");
+                return true;
+            };
+        };
     };
 
     // Job Functions
