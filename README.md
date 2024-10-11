@@ -69,5 +69,5 @@ If you are hosting frontend code somewhere without using DFX, you may need to ma
 
   `The actor also handles dispute resolution. The initiateDispute function initiates a dispute between a client and a freelancer. The submitEvidence function allows submitting evidence for a dispute. The changeDisputeStatus function changes the status of a dispute. The getDispute function retrieves dispute details, while resolveDispute resolves a dispute with a given decision. The getDisputeStatus function retrieves the status of a dispute, and listAllDisputes lists all disputes with their details.`
 
-# Env.mo added to gitignore. Create custom env.mo for hash functionality
+- Env.mo added to gitignore. Create custom env.mo for hash functionality
   
