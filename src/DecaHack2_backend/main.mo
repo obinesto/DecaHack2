@@ -5,10 +5,11 @@ import Option "mo:base/Option";
 import Array "mo:base/Array";
 import Iter "mo:base/Iter";
 import Text "mo:base/Text";
-import Char "mo:base/Char";
+import Env "env";
 import Error "mo:base/Error";
 import Debug "mo:base/Debug";
 import Blob "mo:base/Blob";
+import Char "mo:base/Char";
 import Sha256 "mo:sha2/Sha256";
 
 // Actor
@@ -17,7 +18,7 @@ actor Marketplace {
     // Types
     type User = {
         username : Text;
-        hashedPassword : [Nat8];
+        hashedPassword : Text;
         role : Role;
     };
 
@@ -86,11 +87,7 @@ actor Marketplace {
     private let payments = HashMap.HashMap<Principal, Payment>(10, Principal.equal, Principal.hash);
 
     // User Functions
-    private stable var hashSecret : Text = "";
-
-    private func init(secret : Text) {
-        hashSecret := secret; // This Initializes hashSecret from passed argument
-    };
+    private stable var hashSecret : Text = Env.SECRET;
 
     public query func isLoggedIn(userId : Principal) : async Bool {
         return users.get(userId) != null;
@@ -120,12 +117,10 @@ actor Marketplace {
     };
 
     private func hashPassword(password : Text) : async Text {
-        init(hashSecret);
-        let hashedSecret = hashSecret;
         var hashedPassword = "";
         try {
             for (characters in password.chars()) {
-                hashedPassword #= debug_show (Char.toNat32(characters) * 221) # hashedSecret;
+                hashedPassword #= debug_show (Char.toNat32(characters) * 221) # hashSecret;
             };
             return hashedPassword;
         } catch (e) {
@@ -155,7 +150,7 @@ actor Marketplace {
 
         let user = {
             username = username;
-            hashedPassword = Iter.toArray(Text.encodeUtf8(hashedPasswordText).vals());
+            hashedPassword = hashedPasswordText;
             role = role;
         };
 
@@ -198,7 +193,7 @@ actor Marketplace {
         switch (user) {
             case null { return false };
             case (?u) {
-                return u.hashedPassword == Iter.toArray(Text.encodeUtf8(hashedPassword).vals());
+                return u.hashedPassword == hashedPassword;
             };
         };
     };

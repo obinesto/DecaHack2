@@ -2,8 +2,7 @@
   "canisters": {
     "DecaHack2_backend": {
       "main": "src/DecaHack2_backend/main.mo",
-      "type": "motoko",
-      "init": ["@sa_twd7_78oX_oQa__sm"]
+      "type": "motoko"
     },
     "DecaHack2_frontend": {
       "dependencies": [

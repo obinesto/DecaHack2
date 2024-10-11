@@ -23,6 +23,4 @@ dist/
 
 # environment variables
 .env
-
-# json files
-dfx.json 
+env.mo
