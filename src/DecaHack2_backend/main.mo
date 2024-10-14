@@ -7,9 +7,7 @@ import Iter "mo:base/Iter";
 import Text "mo:base/Text";
 import Env "env";
 import Debug "mo:base/Debug";
-import Blob "mo:base/Blob";
 import Char "mo:base/Char";
-import Sha256 "mo:sha2/Sha256";
 import Result "mo:base/Result";
 import Error "mo:base/Error";
 import Time "mo:base/Time";
@@ -160,18 +158,6 @@ actor Marketplace {
         };
     };
 
-    private func generatePrincipalFromUsername(username : Text) : async Result.Result<Principal, Text> {
-        try {
-            let hash = Sha256.fromBlob(#sha256, Text.encodeUtf8(username));
-            // Truncating the hash to 28 bytes (224 bits) to fit the Principal size limit
-            let truncatedHash = Array.subArray(Blob.toArray(hash), 0, 28);
-            return #ok(Principal.fromBlob(Blob.fromArray(truncatedHash)));
-        } catch (e) {
-            Debug.print("Error generating principal from username: " # Error.message(e));
-            return #err("Generating principal failed");
-        };
-    };
-
     public shared (msg) func signup(username : Text, password : Text, role : Role) : async Result.Result<Principal, Text> {
         if (Principal.isAnonymous(msg.caller)) {
             Debug.print("Unauthorized access");
@@ -181,26 +167,21 @@ actor Marketplace {
         switch (hashedPasswordResult) {
             case (#err(e)) { return #err(e) };
             case (#ok(hashedPasswordText)) {
-                let newUserIdResult = await generatePrincipalFromUsername(username);
-                switch (newUserIdResult) {
+                let newUserId = msg.caller;
+                Debug.print("Using Principal: " # Principal.toText(newUserId));
+                let user = {
+                    username = username;
+                    hashedPassword = hashedPasswordText;
+                    role = role;
+                };
+                let registerResult = await registerUser(newUserId, user);
+                switch (registerResult) {
                     case (#err(e)) { return #err(e) };
-                    case (#ok(newUserId)) {
-                        Debug.print("Generated Principal: " # Principal.toText(newUserId));
-                        let user = {
-                            username = username;
-                            hashedPassword = hashedPasswordText;
-                            role = role;
-                        };
-                        let registerResult = await registerUser(newUserId, user);
-                        switch (registerResult) {
-                            case (#err(e)) { return #err(e) };
-                            case (#ok(success)) {
-                                if (success) {
-                                    return #ok(newUserId);
-                                } else {
-                                    return #err("Signup failed");
-                                };
-                            };
+                    case (#ok(success)) {
+                        if (success) {
+                            return #ok(newUserId);
+                        } else {
+                            return #err("Signup failed");
                         };
                     };
                 };

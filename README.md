@@ -60,82 +60,131 @@ If you are hosting frontend code somewhere without using DFX, you may need to ma
 
 # Marketplace Actor
 
-This project defines a `Marketplace` actor in Motoko, a language used for programming on the Internet Computer. The `Marketplace` actor manages a marketplace where clients and freelancers can interact, post jobs, apply for jobs, and handle payments and disputes.
+This project implements a decentralized marketplace system using the Motoko programming language. The `Marketplace` actor provides functionalities for user management, job postings, escrow payments, and dispute resolution.
 
-## Imports and Actor Definition
+## Imports
 
-The code begins by importing various modules from the Motoko base library, such as [`Principal`], `HashMap`, `Buffer`, and others. These modules provide essential functionalities like handling principals (unique identifiers for users), hash maps, buffers, and cryptographic operations.
+The project imports several modules from the Motoko base library:
+
+- `Principal`: Handles principal identities.
+- `HashMap`: Provides hash map data structures.
+- `Buffer`: Provides buffer data structures.
+- `Option`: Handles optional values.
+- `Array`: Provides array data structures.
+- `Iter`: Provides iteration utilities.
+- `Text`: Handles text manipulation.
+- `Env`: Accesses environment variables.
+- `Debug`: Provides debugging utilities.
+- `Char`: Handles character manipulation.
+- `Result`: Handles result types.
+- `Error`: Handles error types.
+- `Time`: Manages time-related functionalities.
+
+## Actor Definition
+
+The `Marketplace` actor encapsulates all the functionalities of the marketplace.
+
+### Admin Principal
+
+The admin principal is defined using an environment variable
 
 ## Types and Data Structures
 
-Several types are defined to structure the data used in the marketplace:
+Several types are defined to represent different entities within the marketplace
 
-- **User**: Represents a user with a username, hashed password, and role (either `Client` or `Freelancer`).
-- **Role**: An enumeration for user roles.
-- **Payment**: Represents a payment with client and freelancer IDs, amount, and status.
-- **Application**: Represents a job application with a job ID and cover letter.
-- **Job**: Represents a job with a title, description, and salary.
-- **Status**: An enumeration for various statuses like `pending`, `released`, `failed`, etc.
-- **Evidence**: Represents evidence in a dispute with a description and optional file link.
-- **Dispute**: Represents a dispute with client and freelancer IDs, reason, evidence, and status.
-- **ImmutableDispute**: A version of `Dispute` with immutable arrays for evidence and status.
+### User
+
+Represents a user with a username, hashed password, and role
+
+### Role
+
+An enumeration for user roles
+
+### Payment
+
+Represents a payment with client and freelancer IDs, amount, and status
+
+### Application
+
+Represents a job application with a job ID and cover letter
+
+### Job
+
+Represents a job with a title, description, and salary
+
+### Status
+
+An enumeration for various statuses
+
+### Evidence
+
+Represents evidence in a dispute with a description and optional file link
+
+### Dispute
+
+Represents a dispute with client and freelancer IDs, reason, evidence, and status
+
+### ImmutableDispute
+
+A version of `Dispute` with immutable arrays for evidence and status
 
 ## Data Storage
 
-The actor uses several hash maps to store data:
+The actor maintains several `HashMap` data structures to store users, username-to-Principal mappings, disputes, payments, sessions, jobs, and job applications.
 
-- **users**: Maps principals to user data.
-- **usernameMap**: Maps usernames to principals.
-- **disputes**: Maps principals to disputes.
-- **payments**: Maps principals to payments.
-- **sessions**: Maps principals to session timestamps.
-- **jobs**: Maps principals to jobs.
-- **applications**: Maps principals to job applications.
+## User Management
 
-## User Functions
+The actor includes functions for user management:
 
-- **isAdmin**: Checks if the caller is the admin.
-- **isLoggedIn**: Checks if a user is logged in by verifying their session timestamp.
-- **getUserRole**: Retrieves the role of a user.
-- **registerUser**: Registers a new user if they don't already exist.
-- **hashPassword**: Hashes a password using a secret.
-- **generatePrincipalFromUsername**: Generates a principal from a username.
-- **signup**: Registers a new user by hashing their password and generating a principal.
-- **login**: Authenticates a user by verifying their credentials and setting a session timestamp.
-- **validateCredentials**: Validates a user's credentials.
-- **getUsers**: Retrieves all users (admin only).
-- **logout**: Logs out a user by deleting their session.
-- **deleteUser**: Deletes a user (admin only).
+- `isAdmin`: Checks if the caller is the admin.
+- `isLoggedIn`: Checks if a user is logged in based on session time.
+- `getUserRole`: Retrieves the role of a user.
+- `registerUser`: Registers a new user.
+- `hashPassword`: Hashes a user's password.
+- `signup`: Signs up a new user.
+- `login`: Logs in a user.
+- `validateCredentials`: Validates user credentials.
+- `getUsers`: Retrieves all users (admin only).
+- `logout`: Logs out a user.
+- `deleteUser`: Deletes a user (admin only).
 
-## Job Functions
+## Job Management
 
-- **postJob**: Posts a new job.
-- **getJob**: Retrieves a job by client ID.
-- **deleteJob**: Deletes a job (admin only).
+The actor includes functions for job management:
 
-## Job Application Functions
+- `postJob`: Posts a new job.
+- `getJob`: Retrieves a job by client ID.
+- `deleteJob`: Deletes a job (admin only).
 
-- **applyForJob**: Submits a job application.
-- **getApplications**: Retrieves job applications for a freelancer.
+## Job Applications
 
-## Escrow Functions
+The actor includes functions for job applications:
 
-- **createEscrow**: Creates an escrow payment.
-- **releasePayment**: Releases a payment (admin only).
+- `applyForJob`: Applies for a job.
+- `getApplications`: Retrieves job applications for a freelancer.
 
-## Dispute Resolution Functions
+## Escrow Payments
 
-- **initiateDispute**: Initiates a dispute.
-- **submitEvidence**: Submits evidence for a dispute.
-- **changeDisputeStatus**: Changes the status of a dispute (admin only).
-- **getDispute**: Retrieves a dispute.
-- **resolveDispute**: Resolves a dispute (admin only).
-- **getDisputeStatus**: Retrieves the status of a dispute.
-- **listAllDisputes**: Lists all disputes (admin only).
+The actor includes functions for managing escrow payments:
+
+- `createEscrow`: Creates a new escrow payment.
+- `releasePayment`: Releases a payment (admin only).
+
+## Dispute Resolution
+
+The actor includes functions for dispute resolution:
+
+- `initiateDispute`: Initiates a new dispute.
+- `submitEvidence`: Submits evidence for a dispute.
+- `changeDisputeStatus`: Changes the status of a dispute (admin only).
+- `getDispute`: Retrieves a dispute by client ID.
+- `resolveDispute`: Resolves a dispute (admin only).
+- `getDisputeStatus`: Retrieves the status of a dispute.
+- `listAllDisputes`: Lists all disputes (admin only).
 
 ## Summary
 
-The `Marketplace` actor provides a comprehensive set of functionalities to manage users, jobs, applications, payments, and disputes in a decentralized marketplace. It ensures secure interactions through authentication, authorization, and cryptographic operations.
+The `Marketplace` actor provides a comprehensive set of functionalities for managing users, jobs, payments, and disputes in a decentralized marketplace. It leverages various data structures and modules from the Motoko base library to implement these features efficiently.
 
 *Env.mo added to gitignore. Create custom env.mo for hash and admin functionality*
   
