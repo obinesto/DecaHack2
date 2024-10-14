@@ -6,14 +6,19 @@ import Array "mo:base/Array";
 import Iter "mo:base/Iter";
 import Text "mo:base/Text";
 import Env "env";
-import Error "mo:base/Error";
 import Debug "mo:base/Debug";
 import Blob "mo:base/Blob";
 import Char "mo:base/Char";
 import Sha256 "mo:sha2/Sha256";
+import Result "mo:base/Result";
+import Error "mo:base/Error";
+import Time "mo:base/Time";
 
 // Actor
 actor Marketplace {
+
+    // Admin Principal
+    private let admin = Principal.fromText(Env.ADMIN);
 
     // Types
     type User = {
@@ -79,142 +84,224 @@ actor Marketplace {
     private let users = HashMap.HashMap<Principal, User>(0, Principal.equal, Principal.hash);
     // Username to Principal map
     private let usernameMap = HashMap.HashMap<Text, Principal>(0, Text.equal, Text.hash);
-
     // Disputes
     private let disputes = HashMap.HashMap<Principal, Dispute>(10, Principal.equal, Principal.hash);
-
     // Payments
     private let payments = HashMap.HashMap<Principal, Payment>(10, Principal.equal, Principal.hash);
-
+    // Sessions HashMap
+    private let sessions = HashMap.HashMap<Principal, Time.Time>(0, Principal.equal, Principal.hash);
     // User Functions
     private stable var hashSecret : Text = Env.SECRET;
 
-    public query func isLoggedIn(userId : Principal) : async Bool {
-        return users.get(userId) != null;
+    // Check if the caller is the admin
+    private func isAdmin(caller : Principal) : Bool {
+        return caller == admin;
     };
 
-    public query func getUserRole(userId : Principal) : async ?Role {
-        let user = users.get(userId);
-        switch (user) {
-            case null { return null };
-            case (?u) { return ?u.role };
+    public query (msg) func isLoggedIn(userId : Principal) : async Result.Result<Bool, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
+        let sessionTime = sessions.get(userId);
+        switch (sessionTime) {
+            case null { return #ok(false) };
+            case (?time) {
+                let currentTime = Time.now();
+                let duration = currentTime - time;
+                let twoHours = 2 * 60 * 60 * 1000000000; // 2 hours in nanoseconds
+                if (duration > twoHours) {
+                    sessions.delete(userId);
+                    return #ok(false);
+                } else {
+                    return #ok(true);
+                };
+            };
         };
     };
 
-    private func registerUser(userId : Principal, user : User) : async Bool {
+    public query (msg) func getUserRole(userId : Principal) : async Result.Result<?Role, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
+        let user = users.get(userId);
+        switch (user) {
+            case null { return #ok(null) };
+            case (?u) { return #ok(?u.role) };
+        };
+    };
+
+    private func registerUser(userId : Principal, user : User) : async Result.Result<Bool, Text> {
         if (users.get(userId) != null or usernameMap.get(user.username) != null) {
             Debug.print("User already exists");
-            return false; // Either userId or username already exists
+            return #err("User already exists");
         };
         try {
             users.put(userId, user);
             usernameMap.put(user.username, userId);
-            return true;
+            return #ok(true);
         } catch (e) {
             Debug.print("Error registering user: " # Error.message(e));
-            return false;
+            return #err("Error registering user");
         };
     };
 
-    private func hashPassword(password : Text) : async Text {
+    private func hashPassword(password : Text) : async Result.Result<Text, Text> {
         var hashedPassword = "";
         try {
             for (characters in password.chars()) {
                 hashedPassword #= debug_show (Char.toNat32(characters) * 221) # hashSecret;
             };
-            return hashedPassword;
+            return #ok(hashedPassword);
         } catch (e) {
             Debug.print("Error hashing password: " # Error.message(e));
-            throw Error.reject("Hashing password failed");
+            return #err("Hashing password failed");
         };
     };
 
-    private func generatePrincipalFromUsername(username : Text) : async Principal {
+    private func generatePrincipalFromUsername(username : Text) : async Result.Result<Principal, Text> {
         try {
             let hash = Sha256.fromBlob(#sha256, Text.encodeUtf8(username));
             // Truncating the hash to 28 bytes (224 bits) to fit the Principal size limit
             let truncatedHash = Array.subArray(Blob.toArray(hash), 0, 28);
-            return Principal.fromBlob(Blob.fromArray(truncatedHash));
+            return #ok(Principal.fromBlob(Blob.fromArray(truncatedHash)));
         } catch (e) {
             Debug.print("Error generating principal from username: " # Error.message(e));
-            throw Error.reject("Generating principal failed");
+            return #err("Generating principal failed");
         };
     };
 
-    public func signup(username : Text, password : Text, role : Role) : async Principal {
-        let hashedPasswordText = await hashPassword(password);
-
-        // Generating user ID from username
-        let newUserId = await generatePrincipalFromUsername(username);
-        Debug.print("Generated Principal: " # Principal.toText(newUserId));
-
-        let user = {
-            username = username;
-            hashedPassword = hashedPasswordText;
-            role = role;
+    public shared (msg) func signup(username : Text, password : Text, role : Role) : async Result.Result<Principal, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access: kindly login" # Principal.toText(msg.caller));
         };
-
-        let success = await registerUser(newUserId, user);
-        if (success) {
-            return newUserId;
-        } else {
-            throw Error.reject("Signup failed");
-        };
-    };
-
-    public func login(usernameOrPrincipal : Text, password : Text) : async ?Principal {
-        let hashedPassword = await hashPassword(password);
-
-        // Check if login input is a username or Principal
-        let maybeUserId = usernameMap.get(usernameOrPrincipal);
-        let userId = switch maybeUserId {
-            case (?id) id;
-            case null {
-                // Try to parse as Principal if not found in usernameMap
-                let parsedPrincipal = Option.make(Principal.fromText(usernameOrPrincipal));
-                switch (parsedPrincipal) {
-                    case (null) { return null }; // Invalid Principal or username not found
-                    case (?p) { p };
+        let hashedPasswordResult = await hashPassword(password);
+        switch (hashedPasswordResult) {
+            case (#err(e)) { return #err(e) };
+            case (#ok(hashedPasswordText)) {
+                let newUserIdResult = await generatePrincipalFromUsername(username);
+                switch (newUserIdResult) {
+                    case (#err(e)) { return #err(e) };
+                    case (#ok(newUserId)) {
+                        Debug.print("Generated Principal: " # Principal.toText(newUserId));
+                        let user = {
+                            username = username;
+                            hashedPassword = hashedPasswordText;
+                            role = role;
+                        };
+                        let registerResult = await registerUser(newUserId, user);
+                        switch (registerResult) {
+                            case (#err(e)) { return #err(e) };
+                            case (#ok(success)) {
+                                if (success) {
+                                    return #ok(newUserId);
+                                } else {
+                                    return #err("Signup failed");
+                                };
+                            };
+                        };
+                    };
                 };
             };
         };
-
-        let userRole = await getUserRole(userId);
-        let isValid = await validateCredentials(userId, hashedPassword);
-        if (userRole != null and isValid) {
-            return ?userId;
-        } else {
-            return null;
-        };
     };
 
-    private func validateCredentials(userId : Principal, hashedPassword : Text) : async Bool {
-        let user = users.get(userId);
-        switch (user) {
-            case null { return false };
-            case (?u) {
-                return u.hashedPassword == hashedPassword;
+    public shared (msg) func login(usernameOrPrincipal : Text, password : Text) : async Result.Result<?Principal, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
+        let hashedPasswordResult = await hashPassword(password);
+        switch (hashedPasswordResult) {
+            case (#err(e)) { return #err(e) };
+            case (#ok(hashedPassword)) {
+                // Check if login input is a username or Principal
+                let maybeUserId = usernameMap.get(usernameOrPrincipal);
+                let userId = switch maybeUserId {
+                    case (?id) id;
+                    case null {
+                        // Try to parse as Principal if not found in usernameMap
+                        let parsedPrincipal = Option.make(Principal.fromText(usernameOrPrincipal));
+                        switch (parsedPrincipal) {
+                            case (null) { return #ok(null) }; // Invalid Principal or username not found
+                            case (?p) { p };
+                        };
+                    };
+                };
+                let userRoleResult = await getUserRole(userId);
+                switch (userRoleResult) {
+                    case (#err(e)) { return #err(e) };
+                    case (#ok(userRole)) {
+                        let isValidResult = await validateCredentials(userId, hashedPassword);
+                        switch (isValidResult) {
+                            case (#err(e)) { return #err(e) };
+                            case (#ok(isValid)) {
+                                if (userRole != null and isValid) {
+                                    // Set session timestamp
+                                    sessions.put(userId, Time.now());
+                                    return #ok(?userId);
+                                } else {
+                                    return #ok(null);
+                                };
+                            };
+                        };
+                    };
+                };
             };
         };
     };
 
-    public query func getUsers() : async [User] {
-        return Iter.toArray(users.vals());
+    private func validateCredentials(userId : Principal, hashedPassword : Text) : async Result.Result<Bool, Text> {
+        let user = users.get(userId);
+        switch (user) {
+            case null { return #ok(false) };
+            case (?u) {
+                return #ok(u.hashedPassword == hashedPassword);
+            };
+        };
+    };
+
+    public query (msg) func getUsers() : async Result.Result<[User], Text> {
+        if (not isAdmin(msg.caller)) {
+            Debug.print("Unauthorized access, Admin only");
+            return #err("Unauthorized access, Admin only");
+        };
+        return #ok(Iter.toArray(users.vals()));
+    };
+
+    // logout function
+    public shared (msg) func logout(userId : Principal) : async Result.Result<Bool, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
+        if (sessions.get(userId) != null) {
+            sessions.delete(userId);
+            return #ok(true);
+        } else {
+            return #ok(false);
+        };
     };
 
     // Deleting users
-    public func deleteUser(userId : Principal) : async Bool {
+    public shared (msg) func deleteUser(userId : Principal) : async Result.Result<Bool, Text> {
+        if (not isAdmin(msg.caller)) {
+            Debug.print("Unauthorized access, Admin only");
+            return #err("Unauthorized access, Admin only");
+        };
         let user = users.get(userId);
         switch (user) {
             case null {
                 Debug.print("User not found");
-                return false;
+                return #ok(false);
             };
             case (?u) {
                 users.delete(userId);
                 usernameMap.delete(u.username);
                 Debug.print("User deleted successfully");
-                return true;
+                return #ok(true);
             };
         };
     };
@@ -222,34 +309,58 @@ actor Marketplace {
     // Job Functions
     private let jobs = HashMap.HashMap<Principal, Job>(10, Principal.equal, Principal.hash);
 
-    public func postJob(clientId : Principal, job : Job) : async Bool {
+    public shared (msg) func postJob(clientId : Principal, job : Job) : async Result.Result<Bool, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
         jobs.put(clientId, job);
-        return true;
+        return #ok(true);
     };
 
-    public query func getJob(clientId : Principal) : async ?Job {
-        return jobs.get(clientId);
+    public query (msg) func getJob(clientId : Principal) : async Result.Result<?Job, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
+        return #ok(jobs.get(clientId));
     };
 
-    public func deleteJob(clientId : Principal) : async Bool {
+    public shared (msg) func deleteJob(clientId : Principal) : async Result.Result<Bool, Text> {
+        if (not isAdmin(msg.caller)) {
+            Debug.print("Unauthorized access, Admin only");
+            return #err("Unauthorized access, Admin only");
+        };
         jobs.delete(clientId);
-        return true;
+        return #ok(true);
     };
 
     // Job Applications
     private let applications = HashMap.HashMap<Principal, Application>(10, Principal.equal, Principal.hash);
 
-    public func applyForJob(freelancerId : Principal, application : Application) : async Bool {
+    public shared (msg) func applyForJob(freelancerId : Principal, application : Application) : async Result.Result<Bool, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
         applications.put(freelancerId, application);
-        return true;
+        return #ok(true);
     };
 
-    public query func getApplications(freelancerId : Principal) : async ?Application {
-        return applications.get(freelancerId);
+    public query (msg) func getApplications(freelancerId : Principal) : async Result.Result<?Application, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
+        return #ok(applications.get(freelancerId));
     };
 
     // Escrow Functions
-    public func createEscrow(clientId : Principal, freelancerId : Principal, amount : Nat) : async Bool {
+    public shared (msg) func createEscrow(clientId : Principal, freelancerId : Principal, amount : Nat) : async Result.Result<Bool, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
         let payment : Payment = {
             clientId = clientId;
             freelancerId = freelancerId;
@@ -257,28 +368,35 @@ actor Marketplace {
             var status = #pending;
         };
         payments.put(clientId, payment);
-        return true;
+        return #ok(true);
     };
 
-    public func releasePayment(clientId : Principal) : async Bool {
+    public shared (msg) func releasePayment(clientId : Principal) : async Result.Result<Bool, Text> {
+        if (not isAdmin(msg.caller)) {
+            Debug.print("Unauthorized access, Admin only");
+            return #err("Unauthorized access, Admin only");
+        };
         let payment = payments.get(clientId);
         switch (payment) {
             case (?p) {
                 p.status := #released;
-                return true;
+                return #ok(true);
             };
             case null {
-                return false;
+                return #ok(false);
             };
         };
     };
 
     // Dispute Resolution Functions
-    public func initiateDispute(clientId : Principal, freelancerId : Principal, reason : Text) : async Bool {
-        if (Option.isSome(disputes.get(clientId))) {
-            return false; // A dispute is already ongoing for this client
+    public shared (msg) func initiateDispute(clientId : Principal, freelancerId : Principal, reason : Text) : async Result.Result<Bool, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
         };
-
+        if (Option.isSome(disputes.get(clientId))) {
+            return #ok(false); // A dispute is already ongoing for this client
+        };
         let dispute : Dispute = {
             clientId = clientId;
             freelancerId = freelancerId;
@@ -286,94 +404,120 @@ actor Marketplace {
             evidence = Buffer.Buffer<Evidence>(0); // Start with an empty buffer
             status = Buffer.Buffer<Status>(1);
         };
-
         dispute.status.add(#Open);
         disputes.put(clientId, dispute);
-        return true;
+        return #ok(true);
     };
 
-    public func submitEvidence(clientId : Principal, submittedBy : Principal, description : Text, fileLink : ?Text) : async Bool {
+    public shared (msg) func submitEvidence(clientId : Principal, submittedBy : Principal, description : Text, fileLink : ?Text) : async Result.Result<Bool, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
         let dispute = disputes.get(clientId);
         switch (dispute) {
-            case null { return false }; // No ongoing dispute for this client
+            case null { return #ok(false) }; // No ongoing dispute for this client
             case (?d) {
                 let newEvidence : Evidence = {
                     submittedBy = submittedBy;
                     description = description;
                     fileLink = fileLink;
                 };
-
                 d.evidence.add(newEvidence); // Add to buffer
-                return true;
+                return #ok(true);
             };
         };
     };
 
-    public func changeDisputeStatus(clientId : Principal, newStatus : Status) : async Bool {
+    public shared (msg) func changeDisputeStatus(clientId : Principal, newStatus : Status) : async Result.Result<Bool, Text> {
+        if (not isAdmin(msg.caller)) {
+            Debug.print("Unauthorized access, Admin only");
+            return #err("Unauthorized access, Admin only");
+        };
         let dispute = disputes.get(clientId);
         switch (dispute) {
-            case null { return false }; // No ongoing dispute for this client
+            case null { return #ok(false) }; // No ongoing dispute for this client
             case (?d) {
                 d.status.clear();
                 d.status.add(newStatus);
-                return true;
+                return #ok(true);
             };
         };
     };
 
-    public query func getDispute(clientId : Principal) : async ?ImmutableDispute {
+    public query (msg) func getDispute(clientId : Principal) : async Result.Result<?ImmutableDispute, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
         let dispute = disputes.get(clientId);
         switch (dispute) {
-            case null { return null };
+            case null { return #ok(null) };
             case (?d) {
-                return ?{
-                    clientId = d.clientId;
-                    freelancerId = d.freelancerId;
-                    reason = d.reason;
-                    evidence = Buffer.toArray(d.evidence); // Convert Buffer to Array
-                    status = Buffer.toArray(d.status); // Convert Buffer to Array
-                };
+                return #ok(
+                    ?{
+                        clientId = d.clientId;
+                        freelancerId = d.freelancerId;
+                        reason = d.reason;
+                        evidence = Buffer.toArray(d.evidence); // Convert Buffer to Array
+                        status = Buffer.toArray(d.status); // Convert Buffer to Array
+                    }
+                );
             };
         };
     };
 
-    public func resolveDispute(clientId : Principal, decision : Status) : async Bool {
+    public shared (msg) func resolveDispute(clientId : Principal, decision : Status) : async Result.Result<Bool, Text> {
+        if (not isAdmin(msg.caller)) {
+            Debug.print("Unauthorized access, Admin only");
+            return #err("Unauthorized access, Admin only");
+        };
         if (decision == #Resolved or decision == #Rejected) {
             return await changeDisputeStatus(clientId, decision);
         };
-        return false;
+        return #ok(false);
     };
 
-    public query func getDisputeStatus(clientId : Principal) : async ?Status {
+    public query (msg) func getDisputeStatus(clientId : Principal) : async Result.Result<?Status, Text> {
+        if (Principal.isAnonymous(msg.caller)) {
+            Debug.print("Unauthorized access");
+            return #err("Unauthorized access");
+        };
         let dispute = disputes.get(clientId);
         switch (dispute) {
-            case null { return null };
+            case null { return #ok(null) };
             case (?d) {
                 let statusArr = Buffer.toArray(d.status);
                 return switch (statusArr.size()) {
-                    case 0 { null };
-                    case _ { ?statusArr[0] };
+                    case 0 { #ok(null) };
+                    case _ { #ok(?statusArr[0]) };
                 };
             };
         };
     };
 
-    public query func listAllDisputes() : async [(Principal, ImmutableDispute)] {
-        return Array.map<(Principal, Dispute), (Principal, ImmutableDispute)>(
-            Iter.toArray(disputes.entries()),
-            func(entry : (Principal, Dispute)) : (Principal, ImmutableDispute) {
-                let (key, dispute) = entry;
-                return (
-                    key,
-                    {
-                        clientId = dispute.clientId;
-                        freelancerId = dispute.freelancerId;
-                        reason = dispute.reason;
-                        evidence = Buffer.toArray(dispute.evidence); // Convert to array
-                        status = Buffer.toArray(dispute.status); // Convert to array
-                    },
-                );
-            },
+    public query (msg) func listAllDisputes() : async Result.Result<[(Principal, ImmutableDispute)], Text> {
+        if (not isAdmin(msg.caller)) {
+            Debug.print("Unauthorized access, Admin only");
+            return #err("Unauthorized access, Admin only");
+        };
+        return #ok(
+            Array.map<(Principal, Dispute), (Principal, ImmutableDispute)>(
+                Iter.toArray(disputes.entries()),
+                func(entry : (Principal, Dispute)) : (Principal, ImmutableDispute) {
+                    let (key, dispute) = entry;
+                    return (
+                        key,
+                        {
+                            clientId = dispute.clientId;
+                            freelancerId = dispute.freelancerId;
+                            reason = dispute.reason;
+                            evidence = Buffer.toArray(dispute.evidence); // Convert to array
+                            status = Buffer.toArray(dispute.status); // Convert to array
+                        },
+                    );
+                },
+            )
         );
     };
 };

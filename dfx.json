@@ -4,9 +4,14 @@
       "main": "src/DecaHack2_backend/main.mo",
       "type": "motoko"
     },
+    "internet_identity": {
+      "type": "pull",
+      "id": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+    },
     "DecaHack2_frontend": {
       "dependencies": [
-        "DecaHack2_backend"
+        "DecaHack2_backend",
+        "internet_identity"
       ],
       "source": [
         "src/DecaHack2_frontend/dist"
