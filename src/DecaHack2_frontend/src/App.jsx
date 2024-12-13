@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
-import { DecaHack2_backend } from "declarations/DecaHack2_backend";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import HomePage from "./components/Pages/HomePage";
+// import Auth from "./components/Authentication/Auth";
 
-const App = () => {
+export default function App() {
   return (
-    <>
-      <div className="section-1">
-        <h1>App Section</h1>
-      </div>
-    </>
+    <Router>
+      <Routes>
+        <Route path="*" element={<HomePage />} />
+        <Route path="/" element={<HomePage />} />
+        {/* <Route path="/login" element={<Auth />} /> */}
+        {/* <Route path="/register" element={<Auth />} /> */}
+      </Routes>
+    </Router>
   );
-};
-
-export default App;
+}

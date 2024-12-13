@@ -2,7 +2,31 @@
   "canisters": {
     "DecaHack2_backend": {
       "main": "src/DecaHack2_backend/main.mo",
-      "type": "motoko"
+      "type": "motoko",
+      "settings": {
+        "memory_allocation": "100M"
+      }
+    },
+    "users": {
+      "main": "src/DecaHack2_backend/Users.mo",
+      "type": "motoko",
+      "settings": {
+        "memory_allocation": "100M"
+      }
+    },
+    "jobs": {
+      "main": "src/DecaHack2_backend/Jobs.mo",
+      "type": "motoko",
+      "settings": {
+        "memory_allocation": "100M"
+      }
+    },
+    "escrow": {
+      "main": "src/DecaHack2_backend/Escrow.mo",
+      "type": "motoko",
+      "settings": {
+        "memory_allocation": "100M"
+      }
     },
     "internet_identity": {
       "type": "pull",
@@ -11,6 +35,9 @@
     "DecaHack2_frontend": {
       "dependencies": [
         "DecaHack2_backend",
+        "users",
+        "jobs",
+        "escrow",
         "internet_identity"
       ],
       "source": [
