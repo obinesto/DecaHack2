@@ -1,15 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { AuthClient } from '@dfinity/auth-client';
-import { idlFactory } from '../../../../declarations/users/users.did';
+import React, { useState, useEffect, useLo } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthClient } from "@dfinity/auth-client";
+import { DecaHack2_backend } from "declarations/DecaHack2_backend";
 
-const Auth = () => {
+const Auth = ({ notify }) => {
   const [authClient, setAuthClient] = useState(null);
-  const [actor, setActor] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('Client');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [role, setRole] = useState("Client");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
   useEffect(() => {
     const initAuth = async () => {
       const client = await AuthClient.create();
@@ -26,120 +29,133 @@ const Auth = () => {
     initAuth();
   }, []);
 
-  const initActor = async (client) => {
-    const agent = new HttpAgent({ identity: client.getIdentity() });
-    const actor = Actor.createActor(idlFactory, {
-      agent,
-      canisterId: process.env.USERS_CANISTER_ID,
-    });
-    setActor(actor);
-  };
-
   const handleSignup = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      const result = await actor.signup(username, password, { [role]: null });
-      if ('ok' in result) {
-        console.log('Signup successful');
+      const result = await DecaHack2_backend.signup(username, password, {
+        [role]: null,
+      });
+      if ("ok" in result) {
+        console.log("Signup successful");
+        notify("Signup successful", "success");
         setIsAuthenticated(true);
+        navigate("/no-dashboard-yet");
       } else {
-        console.error('Signup failed:', result.err);
+        console.error("Signup failed:", result.err);
+        setError(result.err);
+        notify("Signup failed", "error");
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error("Signup error:", error);  
+      notify("Signup error", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
-      const result = await actor.login(username, password);
-      if ('ok' in result) {
-        console.log('Login successful');
+      const result = await DecaHack2_backend.login(username, password);
+      if ("ok" in result) {
+        console.log("Login successful");
+        notify("Login successful", "success");
         setIsAuthenticated(true);
+        navigate("/no-dashboard-yet");
       } else {
-        console.error('Login failed:', result.err);
+        console.error("Login failed:", result.err);
+        setError(result.err);
+        notify("Login failed", "error");
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
+      notify("Login error", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      const result = await actor.logout();
-      if ('ok' in result) {
-        console.log('Logout successful');
-        setIsAuthenticated(false);
-        authClient.logout();
-      } else {
-        console.error('Logout failed:', result.err);
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-  if (!authClient) return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  if (!authClient)
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Loading...
+      </div>
+    );
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-100">
+    <div className="flex justify-center items-center min-h-screen bg-purple-300">
       <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        {isAuthenticated ? (
-          <div className="text-center">
-            <p className="text-2xl font-semibold mb-4">Welcome, {username}!</p>
-            <button 
-              onClick={handleLogout}
-              className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 transition duration-300"
-            >
-              Logout
-            </button>
-          </div>
-        ) : (
-          <div>
-            <h2 className="text-2xl font-bold mb-6 text-center">{isAuthenticated ? 'Login' : 'Signup'}</h2>
-            <form onSubmit={isAuthenticated ? handleLogin : handleSignup} className="space-y-4">
-              <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {!isAuthenticated && (
-                <select 
-                  value={role} 
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Client">Client</option>
-                  <option value="Freelancer">Freelancer</option>
-                </select>
-              )}
-              <button 
-                type="submit"
-                className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300"
-              >
-                {isAuthenticated ? 'Login' : 'Signup'}
-              </button>
-            </form>
-            <p className="mt-4 text-center text-sm text-gray-600">
-              {isAuthenticated ? "Don't have an account? " : "Already have an account? "}
-              <button 
-                onClick={() => setIsAuthenticated(!isAuthenticated)}
-                className="text-blue-500 hover:underline"
-              >
-                {isAuthenticated ? 'Sign up' : 'Log in'}
-              </button>
-            </p>
-          </div>
+        <div>
+          <h2 className="text-2xl font-bold mb-6 text-center">
+            {isAuthenticated ? "Login" : "Signup"}
+          </h2>
+          {error && (
+          <p className="text-red-600 text-center mb-4 text-sm font-medium">
+            {error}
+          </p>
         )}
+          <form
+            onSubmit={isAuthenticated ? handleLogin : handleSignup}
+            className="space-y-4"
+          >
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-700"
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-700"
+            />
+            {!isAuthenticated && (
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-700"
+              >
+                <option value="Client">Client</option>
+                <option value="Freelancer">Freelancer</option>
+              </select>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full bg-indigo-700 text-white py-2 px-4 rounded hover:bg-indigo-600 transition duration-300 ${
+                loading
+                  ? "bg-indigo-600 cursor-not-allowed"
+                  : "bg-indigo-700 hover:bg-indigo-600"
+              }`}
+            >
+              {loading ? (
+                <div className="flex justify-center items-center">
+                  <div className="w-5 h-5 border-4 border-t-transparent border-gray-300 rounded-full animate-spin"></div>
+                </div>
+              ) : isAuthenticated ? (
+                "Login"
+              ) : (
+                "Register"
+              )}
+            </button>
+          </form>
+          <p className="mt-4 text-center text-sm text-gray-600">
+            {isAuthenticated
+              ? "Don't have an account? "
+              : "Already have an account? "}
+            <button
+              onClick={() => setIsAuthenticated(!isAuthenticated)}
+              className="text-indigo-700 hover:underline"
+            >
+              {isAuthenticated ? "Sign up" : "Log in"}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

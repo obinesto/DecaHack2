@@ -6,15 +6,16 @@ import Env "Env";
 actor Marketplace {
     private let admin = Principal.fromText(Env.ADMIN);
 
+    public query ({ caller : Principal }) func getCaller() : async Principal {
+        return caller;
+    };
+
     // Actor references
     private let usersCanister : actor {
         signup : (username : Text, password : Text, role : { #Client; #Freelancer }) -> async Result.Result<Principal, Text>;
         login : (usernameOrPrincipal : Text, password : Text) -> async Result.Result<Principal, Text>;
         isLoggedIn : (userId : Principal) -> async Bool;
-        getUsers : () -> async [{
-            username : Text;
-            role : { #Client; #Freelancer };
-        }];
+        getUsers : () -> async [(Principal, { username : Text; role : { #Client; #Freelancer } })];
         deleteUser : (userId : Principal) -> async Result.Result<(), Text>;
         updateUser : (userId : Principal, newUsername : ?Text, newPassword : ?Text, newRole : ?{ #Client; #Freelancer }) -> async Result.Result<(), Text>;
         logout : () -> async Result.Result<(), Text>;
@@ -63,29 +64,23 @@ actor Marketplace {
         await usersCanister.isLoggedIn(userId);
     };
 
-   public shared ({ caller }) func getUsers() : async Result.Result<[{username : Text; role : { #Client; #Freelancer };}], Text> {
-    if (not isAdmin(caller)) {
-        return #err("Access denied");
-    };
-    try {
-        let users = await usersCanister.getUsers();
-        #ok(users)
-    } catch (error) {
-        #err("Error fetching users: " # Error.message(error))
-    }
-};
-
-    public shared ({ caller }) func deleteUser(userId : Principal) : async Result.Result<(), Text> {
-        if (not isAdmin(caller) and not Principal.equal(caller, userId)) {
-            return #err("Access denied. Only admin or the user can delete their account.");
+    public shared({caller}) func getUsers() : async Result.Result<[(Principal, { username : Text; role : { #Client; #Freelancer } })], Text> {
+        if (not isAdmin(caller)) {
+            return #err("Access denied. Only admin can get users.");
         };
+        try {
+            let users = await usersCanister.getUsers();
+            #ok(users);
+        } catch (error) {
+            #err("Error fetching users: " # Error.message(error));
+        };
+    };
+
+    public shared func deleteUser(userId : Principal) : async Result.Result<(), Text> {
         await usersCanister.deleteUser(userId);
     };
 
-    public shared ({ caller }) func updateUser(userId : Principal, newUsername : ?Text, newPassword : ?Text, newRole : ?{ #Client; #Freelancer }) : async Result.Result<(), Text> {
-        if (not isAdmin(caller) and not Principal.equal(caller, userId)) {
-            return #err("Access denied. Only admin or the user can update their account.");
-        };
+    public shared func updateUser(userId : Principal, newUsername : ?Text, newPassword : ?Text, newRole : ?{ #Client; #Freelancer }) : async Result.Result<(), Text> {
         await usersCanister.updateUser(userId, newUsername, newPassword, newRole);
     };
 

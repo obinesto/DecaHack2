@@ -128,6 +128,6 @@ The project uses `HashMap` for efficient data storage:
 
 ## 📝 Notes
 - **Frontend Variables**: Configure `DFX_NETWORK` to `ic` or manage `process.env.DFX_NETWORK` manually.
-- **Environment Variables**: `Env.mo` added to `.gitignore`. Create new `Env.mo` and define custom module for admin, canisters ID and password hash variables. E.g `module{public let admin = "aa-aaa"}`
+- **Environment Variables**: `Env.mo` added to `.gitignore`. Create new `Env.mo` and define custom module for admin and canisters ID variables. E.g `module{public let admin = "aaaaa-aa"}`
 
 ---
